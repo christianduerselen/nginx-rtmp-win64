@@ -104,6 +104,7 @@ jobs:
           echo "Patching ngx_rtmp.h for MinGW/GCC compatibility..."
           sed -i '/typedef __int8 /d' ngx_rtmp.h
           sed -i '/typedef unsigned __int8 /d' ngx_rtmp.h
+          sed -i '/#pragma warning/d' ngx_rtmp.h
           echo "Patch applied."
 
       - name: Configure nginx
@@ -115,7 +116,7 @@ jobs:
 
           cd "nginx-${NGINX_VERSION}"
 
-          auto/configure \
+          ./configure \
             --with-cc=gcc \
             --prefix= \
             --conf-path=conf/nginx.conf \
@@ -128,7 +129,7 @@ jobs:
             --http-fastcgi-temp-path=temp/fastcgi_temp \
             --http-scgi-temp-path=temp/scgi_temp \
             --http-uwsgi-temp-path=temp/uwsgi_temp \
-            --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s' \
+            --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s -Wno-error=unused-variable' \
             --with-ld-opt='-static' \
             --with-pcre="../pcre2-${PCRE2_VERSION}" \
             --with-zlib="../zlib-${ZLIB_VERSION}" \
