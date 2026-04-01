@@ -98,7 +98,7 @@ echo "--- Patching nginx-rtmp-module for MinGW/GCC compatibility ---"
 cd nginx-rtmp-module
 sed -i '/typedef __int8 /d' ngx_rtmp.h
 sed -i '/typedef unsigned __int8 /d' ngx_rtmp.h
-sed -i '/#pragma warning/d' ngx_rtmp.h
+find . -name '*.h' -o -name '*.c' | xargs sed -i '/#pragma warning/d'
 echo "OK"
 cd "${BUILD_DIR}"
 echo ""
@@ -121,7 +121,7 @@ cd "nginx-${NGINX_VERSION}"
   --http-fastcgi-temp-path=temp/fastcgi_temp \
   --http-scgi-temp-path=temp/scgi_temp \
   --http-uwsgi-temp-path=temp/uwsgi_temp \
-  --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s -Wno-error=unused-variable -Wno-error=sign-compare' \
+  --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s -Wno-error=unused-variable -Wno-error=sign-compare -Wno-error=unknown-pragmas' \
   --with-ld-opt='-static' \
   --with-pcre="../pcre2-${PCRE2_VERSION}" \
   --with-zlib="../zlib-${ZLIB_VERSION}" \
