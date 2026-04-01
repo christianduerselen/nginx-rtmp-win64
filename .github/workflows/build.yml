@@ -129,7 +129,7 @@ jobs:
             --http-fastcgi-temp-path=temp/fastcgi_temp \
             --http-scgi-temp-path=temp/scgi_temp \
             --http-uwsgi-temp-path=temp/uwsgi_temp \
-            --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s -Wno-error=unused-variable' \
+            --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s -Wno-error=unused-variable -Wno-error=sign-compare' \
             --with-ld-opt='-static' \
             --with-pcre="../pcre2-${PCRE2_VERSION}" \
             --with-zlib="../zlib-${ZLIB_VERSION}" \
