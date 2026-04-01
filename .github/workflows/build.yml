@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       nginx_version:
-        description: 'Nginx version (e.g., 1.28.3 stable, 1.29.7 mainline)'
+        description: 'Nginx version (e.g., 1.29.7)'
         required: true
-        default: '1.28.3'
+        default: '1.29.7'
       rtmp_module_ref:
         description: 'nginx-rtmp-module git ref (branch, tag, or commit SHA)'
         required: true
@@ -163,6 +163,10 @@ jobs:
 
           # Create directory structure
           New-Item -ItemType Directory -Force -Path "$dir/conf", "$dir/logs", "$dir/temp", "$dir/html" | Out-Null
+
+          # Compress-Archive silently drops empty directories from the zip.
+          # Add placeholder files so logs/ and temp/ survive packaging.
+          New-Item -ItemType File -Force -Path "$dir/logs/.gitkeep", "$dir/temp/.gitkeep" | Out-Null
 
           # Copy nginx binary
           Copy-Item "nginx-$ngxVer/objs/nginx.exe" "$dir/"

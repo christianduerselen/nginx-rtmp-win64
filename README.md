@@ -8,11 +8,11 @@ The official nginx Windows downloads from nginx.org do not include the RTMP modu
 
 As of April 2026, the few community projects that offer pre-built Windows binaries with the RTMP module are **not up to date**:
 
-| Project | Nginx Version | Current Stable | Status |
-|---------|--------------|----------------|--------|
-| [iliweii/nginx-rtmp-win64](https://github.com/iliweii/nginx-rtmp-win64) | 1.28.1 | **1.28.3** | Single release, Jan 2025 |
-| [ShiYioo/nginx-rtmp-win](https://github.com/ShiYioo/nginx-rtmp-win) | 1.28.0 | **1.28.3** | No releases, manual upload |
-| [AsabaShota1995/nginx-rtmp-win64](https://github.com/AsabaShota1995/nginx-rtmp-win64) | 1.29.1 | **1.29.7** (mainline) | No releases, uses nginx-http-flv-module |
+| Project | Nginx Version | Latest | Status |
+|---------|--------------|--------|--------|
+| [iliweii/nginx-rtmp-win64](https://github.com/iliweii/nginx-rtmp-win64) | 1.28.1 | **1.29.7** | Single release, Jan 2025 |
+| [ShiYioo/nginx-rtmp-win](https://github.com/ShiYioo/nginx-rtmp-win) | 1.28.0 | **1.29.7** | No releases, manual upload |
+| [AsabaShota1995/nginx-rtmp-win64](https://github.com/AsabaShota1995/nginx-rtmp-win64) | 1.29.1 | **1.29.7** | No releases, uses nginx-http-flv-module |
 
 None of these projects use automated CI/CD pipelines — they are one-time manual uploads that quickly fall behind.
 
@@ -26,7 +26,7 @@ This repository provides a **GitHub Actions workflow** that builds any specified
 2. Go to **Actions** → **Build Nginx with RTMP Module for Windows**
 3. Click **Run workflow**
 4. Configure the versions:
-   - **Nginx version**: e.g., `1.28.3` (stable) or `1.29.7` (mainline)
+   - **Nginx version**: e.g., `1.29.7`
    - **nginx-rtmp-module ref**: `master` (latest) or a tag like `v1.2.2`
    - **OpenSSL version**: e.g., `3.4.0`
    - **PCRE2 version**: e.g., `10.44`
@@ -83,8 +83,7 @@ Per the [upstream documentation](https://github.com/arut/nginx-rtmp-module#windo
 
 ## Checking current nginx versions
 
-- **Stable**: https://nginx.org/en/download.html (1.28.x line)
-- **Mainline**: https://nginx.org/en/download.html (1.29.x line)
+https://nginx.org/en/download.html
 
 ## License
 
