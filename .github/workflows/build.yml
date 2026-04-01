@@ -1,0 +1,271 @@
+name: Build Nginx with RTMP Module for Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      nginx_version:
+        description: 'Nginx version (e.g., 1.28.3 stable, 1.29.7 mainline)'
+        required: true
+        default: '1.28.3'
+      rtmp_module_ref:
+        description: 'nginx-rtmp-module git ref (branch, tag, or commit SHA)'
+        required: true
+        default: 'master'
+      openssl_version:
+        description: 'OpenSSL version'
+        required: true
+        default: '3.4.0'
+      pcre2_version:
+        description: 'PCRE2 version'
+        required: true
+        default: '10.44'
+      zlib_version:
+        description: 'zlib version'
+        required: true
+        default: '1.3.1'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 MinGW64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            make
+            perl
+            git
+
+      - name: Download nginx source
+        run: |
+          NGINX_VERSION="${{ inputs.nginx_version }}"
+          echo "Downloading nginx ${NGINX_VERSION}..."
+          curl -fsSL -o nginx.tar.gz \
+            "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
+          tar xzf nginx.tar.gz
+          echo "nginx ${NGINX_VERSION} source ready."
+
+      - name: Download nginx-rtmp-module
+        run: |
+          RTMP_REF="${{ inputs.rtmp_module_ref }}"
+          echo "Cloning nginx-rtmp-module (${RTMP_REF})..."
+          git clone --depth 1 --branch "${RTMP_REF}" \
+            https://github.com/arut/nginx-rtmp-module.git 2>/dev/null \
+          || git clone https://github.com/arut/nginx-rtmp-module.git
+          echo "nginx-rtmp-module ready."
+
+      - name: Download PCRE2
+        run: |
+          PCRE2_VERSION="${{ inputs.pcre2_version }}"
+          echo "Downloading PCRE2 ${PCRE2_VERSION}..."
+          curl -fsSL -o pcre2.tar.gz \
+            "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz"
+          tar xzf pcre2.tar.gz
+          echo "PCRE2 ${PCRE2_VERSION} ready."
+
+      - name: Download zlib
+        run: |
+          ZLIB_VERSION="${{ inputs.zlib_version }}"
+          echo "Downloading zlib ${ZLIB_VERSION}..."
+          curl -fsSL -o zlib.tar.gz \
+            "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz"
+          tar xzf zlib.tar.gz
+          echo "zlib ${ZLIB_VERSION} ready."
+
+      - name: Download OpenSSL
+        run: |
+          OPENSSL_VERSION="${{ inputs.openssl_version }}"
+          echo "Downloading OpenSSL ${OPENSSL_VERSION}..."
+          # Try GitHub releases first (OpenSSL 3.x), fall back to openssl.org
+          curl -fsSL -o openssl.tar.gz \
+            "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+          || curl -fsSL -o openssl.tar.gz \
+            "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+          tar xzf openssl.tar.gz
+          echo "OpenSSL ${OPENSSL_VERSION} ready."
+
+      - name: Patch nginx-rtmp-module for MinGW compatibility
+        run: |
+          cd nginx-rtmp-module
+
+          # The module defines int8_t/uint8_t via MSVC-specific __int8 types.
+          # These conflict with stdint.h definitions when building with GCC/MinGW.
+          # Remove the typedefs — all modern compilers provide these via stdint.h.
+          echo "Patching ngx_rtmp.h for MinGW/GCC compatibility..."
+          sed -i '/typedef __int8 /d' ngx_rtmp.h
+          sed -i '/typedef unsigned __int8 /d' ngx_rtmp.h
+          echo "Patch applied."
+
+      - name: Configure nginx
+        run: |
+          NGINX_VERSION="${{ inputs.nginx_version }}"
+          OPENSSL_VERSION="${{ inputs.openssl_version }}"
+          PCRE2_VERSION="${{ inputs.pcre2_version }}"
+          ZLIB_VERSION="${{ inputs.zlib_version }}"
+
+          cd "nginx-${NGINX_VERSION}"
+
+          auto/configure \
+            --with-cc=gcc \
+            --prefix= \
+            --conf-path=conf/nginx.conf \
+            --pid-path=logs/nginx.pid \
+            --http-log-path=logs/access.log \
+            --error-log-path=logs/error.log \
+            --sbin-path=nginx.exe \
+            --http-client-body-temp-path=temp/client_body_temp \
+            --http-proxy-temp-path=temp/proxy_temp \
+            --http-fastcgi-temp-path=temp/fastcgi_temp \
+            --http-scgi-temp-path=temp/scgi_temp \
+            --http-uwsgi-temp-path=temp/uwsgi_temp \
+            --with-cc-opt='-DFD_SETSIZE=1024 -O2 -s' \
+            --with-ld-opt='-static' \
+            --with-pcre="../pcre2-${PCRE2_VERSION}" \
+            --with-zlib="../zlib-${ZLIB_VERSION}" \
+            --with-openssl="../openssl-${OPENSSL_VERSION}" \
+            --with-openssl-opt='no-asm' \
+            --with-http_ssl_module \
+            --with-http_v2_module \
+            --with-http_realip_module \
+            --with-http_sub_module \
+            --add-module=../nginx-rtmp-module
+
+          echo ""
+          echo "Configuration complete. Summary:"
+          cat objs/ngx_auto_config.h | grep NGX_CONFIGURE | head -1
+
+      - name: Build nginx
+        run: |
+          cd "nginx-${{ inputs.nginx_version }}"
+          make -j$(nproc)
+          echo ""
+          echo "Build complete. Binary size:"
+          ls -lh objs/nginx.exe
+
+      - name: Package distribution
+        shell: pwsh
+        run: |
+          $ngxVer = "${{ inputs.nginx_version }}"
+          $dir = "nginx-rtmp-win64"
+
+          # Create directory structure
+          New-Item -ItemType Directory -Force -Path "$dir/conf", "$dir/logs", "$dir/temp", "$dir/html" | Out-Null
+
+          # Copy nginx binary
+          Copy-Item "nginx-$ngxVer/objs/nginx.exe" "$dir/"
+
+          # Copy default configuration and web files
+          Copy-Item "nginx-$ngxVer/conf/mime.types" "$dir/conf/"
+          Copy-Item "nginx-$ngxVer/conf/mime.types.default" "$dir/conf/" -ErrorAction SilentlyContinue
+          Copy-Item "nginx-$ngxVer/html/index.html" "$dir/html/"
+          Copy-Item "nginx-$ngxVer/html/50x.html" "$dir/html/"
+
+          # Copy RTMP stat stylesheet
+          Copy-Item "nginx-rtmp-module/stat.xsl" "$dir/html/"
+
+          # Create a sample RTMP-enabled nginx.conf
+          @"
+          worker_processes  1;
+
+          events {
+              worker_connections  1024;
+          }
+
+          rtmp {
+              server {
+                  listen 1935;
+                  chunk_size 4096;
+
+                  application live {
+                      live on;
+                      record off;
+                  }
+              }
+          }
+
+          http {
+              include       mime.types;
+              default_type  application/octet-stream;
+              sendfile      on;
+              keepalive_timeout  65;
+
+              server {
+                  listen 8080;
+
+                  location /stat {
+                      rtmp_stat all;
+                      rtmp_stat_stylesheet stat.xsl;
+                  }
+
+                  location /stat.xsl {
+                      root html;
+                  }
+
+                  location / {
+                      root   html;
+                      index  index.html index.htm;
+                  }
+              }
+          }
+          "@ | Set-Content "$dir/conf/nginx.conf" -Encoding UTF8
+
+          # Create version info file
+          @"
+          Nginx $ngxVer with nginx-rtmp-module
+          Built on: $(Get-Date -Format 'yyyy-MM-dd')
+          Components:
+            - Nginx: $ngxVer
+            - nginx-rtmp-module: ${{ inputs.rtmp_module_ref }}
+            - OpenSSL: ${{ inputs.openssl_version }}
+            - PCRE2: ${{ inputs.pcre2_version }}
+            - zlib: ${{ inputs.zlib_version }}
+          "@ | Set-Content "$dir/VERSION.txt" -Encoding UTF8
+
+          # Create zip
+          Compress-Archive -Path "$dir/*" -DestinationPath "nginx-rtmp-win64-$ngxVer.zip"
+          Write-Host "Package created: nginx-rtmp-win64-$ngxVer.zip"
+          Get-ChildItem "nginx-rtmp-win64-$ngxVer.zip" | Select-Object Name, Length
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nginx-rtmp-win64-${{ inputs.nginx_version }}
+          path: nginx-rtmp-win64-${{ inputs.nginx_version }}.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nginx-${{ inputs.nginx_version }}-rtmp
+          name: Nginx ${{ inputs.nginx_version }} with RTMP Module (Windows x64)
+          body: |
+            **Nginx ${{ inputs.nginx_version }}** compiled with **nginx-rtmp-module** for **Windows x64**.
+
+            Built with MSYS2 MinGW-w64 GCC, statically linked for portability.
+
+            ### Components
+            | Component | Version |
+            |-----------|---------|
+            | Nginx | ${{ inputs.nginx_version }} |
+            | nginx-rtmp-module | ${{ inputs.rtmp_module_ref }} |
+            | OpenSSL | ${{ inputs.openssl_version }} |
+            | PCRE2 | ${{ inputs.pcre2_version }} |
+            | zlib | ${{ inputs.zlib_version }} |
+
+            ### Quick Start
+            1. Extract the zip
+            2. Run `nginx.exe`
+            3. Stream to `rtmp://localhost:1935/live/stream`
+            4. View stats at `http://localhost:8080/stat`
+          files: nginx-rtmp-win64-${{ inputs.nginx_version }}.zip
+          draft: false
+          prerelease: false
